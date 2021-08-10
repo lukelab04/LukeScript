@@ -18,6 +18,7 @@ namespace shell
             "execute"
         };
 
+        //This holds "structure" elements (basically anything that holds code within curly braces.)
         public static List<string> Loops = new List<string>(){
             "repeat",
             "while",
@@ -29,24 +30,30 @@ namespace shell
             "exit",
             "return"
         };
+        
+        //Functions are stored as variables, so they are included here.
         public static List<string> variableNames = new List<string>(){
             "num",
             "string",
             "function"
         };
-
+        
+        //Parent class to hold repeat, if, else, while, etc.
         public class Scope{
-            //Parent class to hold repeat, if, else, while, etc.
+            //Local variables
             public Dictionary<string, object> localVars = new Dictionary<string, object>();
 
+            //Return value, stored as an object to make casting easier
             public Object returnval = null;
 
             public Scope parentScope = null;
+            //Type can be if, repeat, while, or function
             public string type = "";
 
             public string returnType;
         }
 
+        //Class to hold Repeat loops. Extends Scope.
         public class Repeat : Scope{
             public int startPos, endpos, repeatAmount;
             public string content;
@@ -58,6 +65,7 @@ namespace shell
             }
         }
 
+        //Class to hold While loops. Extends Scope;
         public class While : Scope{
             public int startPos, endPos;
             public string content, conditional;
@@ -69,6 +77,7 @@ namespace shell
             }
         }
 
+        //Class to hold If statements. Extends Scope.
         public class If : Scope{
             public int startPos, endPos;
             public string content, conditional;
@@ -80,10 +89,12 @@ namespace shell
             }
         }
 
+        //Class to hold Functions. Extends Scope.
         public class Function : Scope{
             public string content;
             public List<string> args;
 
+            //Constructor to assign the arguments to the local variables
             public Function(string cont, List<string> arguments){
                 content = cont;
                 args = arguments;
@@ -98,9 +109,11 @@ namespace shell
 
         public static Dictionary<string, object> variables = new Dictionary<string, object>();
 
-        static void Main(string[] args){
+        static void Main(string[] args)
+            //Paths of the input and output text files
             string path = "./lukescript.txt";
             string path2 = "./lukescriptcommands.txt";
+            //Clear commands file
             File.WriteAllText(path2, String.Empty);
             TextBody = File.ReadAllText(path);
             try{
@@ -111,6 +124,7 @@ namespace shell
             }
         }
 
+        //Gets the string that is between the nearest curly braces. 
         public  static string getsection(int pos, string input){
             while(pos < input.Length && input[pos] != '{'){pos++;}
             if(pos >= input.Length){throw new Exception("Expected {.");}
@@ -127,6 +141,7 @@ namespace shell
             throw new Exception("Expected }.");
         }
 
+        //Gets a single word, stops at any non-letter or '_' character.
         public static string getword(int pos, string input, bool updatePosition){
             string outword = "";
             while(pos < input.Length && (Char.IsLetter(input[pos]) || input[pos] == '_')){
@@ -137,12 +152,7 @@ namespace shell
             return outword;
         }
 
-        /// <summary>
-            ///Eliminates white space between the current position and the next non-whitespace character.
-        ///</summary>
-        ///<remarks>
-            ///When the function returns, the current posisition is either a non-whitespace character or the end of the string. 
-        ///</remarks>
+        //Eliminates the whitespace at the current position and continues until it hits a non-whitespace character.
         public static void elimWhiteSpace(string input, int pos){
             while(pos < input.Length && Char.IsWhiteSpace(input[pos])){
                 pos++;
@@ -151,6 +161,7 @@ namespace shell
             return;
         }
 
+        //Helper function to see if a word is a built-in function
         public static bool isBuiltIn(string func){
             if(builtInFuncs.IndexOf(func) > -1){
                 return true;
@@ -158,6 +169,7 @@ namespace shell
             return false;
         }
 
+        //Helper function to get the string contained within the nearest parenthesis. 
         public static string getParenExpr(string input, int pos){
             if(pos >= input.Length || input[pos] != '('){throw new Exception("Expected parenthesis.");}
 
@@ -178,6 +190,7 @@ namespace shell
             return expr;
         }
 
+        //Helper function to skip the position to the nearest closing parenthesis.
         public static int skipToParen(int pos, string input){
             int pcount = 0;
             int i = 0;
@@ -195,6 +208,7 @@ namespace shell
             return i;
         }
 
+        //Helper function to get the return type of a function, which is contained within < >
         public static string getFunctionType(int pos, string input){
             int i = pos;
             for(i = pos; i < input.Length; i++){
@@ -218,6 +232,7 @@ namespace shell
             return typestr;
         }
 
+        //Helper function to get the type (string, num, or function) of an input string.
         public static string gettype(string input, Scope localscope, bool skipFunctions = false){
 
             bool foundFunction = false;
@@ -260,6 +275,7 @@ namespace shell
             return "";
         }
 
+        //Helper function to arrange a comma-separated string of arguments into a list.
         public static List<string> getargs(string input){
             string currentarg = "";
             int parenCount = 0;
@@ -276,6 +292,7 @@ namespace shell
             return arglist;
         }
 
+        //Helper function to evaluate math on an input that has the type of string
         public static string evalStringMath(string input, Scope localscope){
             string finalString = "";
             for(int i = 0; i < input.Length; i++){
@@ -324,6 +341,8 @@ namespace shell
             return finalString;
         }
 
+    
+        //Helper function to evaluate math on an input of type number
         public static string evalNumberMath(string input, Scope localscope){
             string evalString = "";
             for(int i = 0; i < input.Length; i++){
@@ -381,6 +400,7 @@ namespace shell
             return numfinal.ToString();
         }
 
+        //Helper function to execute the built-in functions. 'execute' only works in the Linux build.
         public static void executeBuiltIns(string func, int pos, string input, Scope localscope){
             string outputText = "";
             elimWhiteSpace(input, pos);
@@ -434,9 +454,7 @@ namespace shell
         }
 
 
-        ///<summary>
-            ///Given the inupt and a position, advances the position to the closest semicolon that is not in a string. 
-        ///</summary>
+        //Jumps the position to the nearest semicolon that isn't in a string.
         public static void jumpToSemicolon(string input, int pos){
             while(pos < input.Length){
                 if(input[pos] == '"'){lookingForString = !lookingForString;}
@@ -449,6 +467,7 @@ namespace shell
             throw new Exception("Expected ';'");
         }
 
+        //Helper function to find the location of the nearest outer closing brace.
         public static int findClosingCurly(string input, int pos){
             int curlyCount = 0;
             while(pos < input.Length){
@@ -466,6 +485,7 @@ namespace shell
             throw new Exception("Expected }.");
         }
 
+        //Helper function to get the ending position of an if statment. Recursivley calls itself to account for else if and else.
         public static int getIfEndPos(string input, int pos){
             Position = pos + 1;
             elimWhiteSpace(input, Position);
@@ -479,12 +499,7 @@ namespace shell
         }
 
 
-        ///<summary>
-            ///Given a variable name and an expression, assigns the variable to the expression. 
-        ///</summary>
-        ///<remarks>
-            ///Position of input string should be AFTER '=' or other assignment operator. 
-        ///</remarks>
+        //Assigns a variable to a value. This handles functions, numbers, and strings.
         public static void assignVariable(int pos, string input, string varname, Scope localscope){
             int tempPos = Position;
             jumpToSemicolon(input, Position);
@@ -570,6 +585,7 @@ namespace shell
             }
         }
 
+        //Helper function to see if a string is a logical comparator
         public static bool isLogicalComparator(string input){
             if( input == "=="   ||
                 input == "!="   ||
@@ -582,6 +598,7 @@ namespace shell
             return false;
         }
 
+        //Helper function to get the inner conditional of an if statement (anything within parenthesis)
         public static string getInnerConditional(string conditional){
             string innerConditional = "";
             bool foundLogicalComparator = false;
@@ -605,6 +622,7 @@ namespace shell
             throw new Exception("Could not parse conditionals.");
         }
 
+        //Helper function to compare string values based on an operator
         public static bool compareStringValues(string a, string b, string strOperator){
             switch(strOperator){
                 case "==": return a == b;
@@ -613,6 +631,7 @@ namespace shell
             throw new Exception("Cannot use operator " + strOperator + " on strings.");
         }
 
+        //Helper function to compare number values based on an operator
         public static bool compareNumberValues(double a, double b, string strOperator){
             switch(strOperator){
                 case "==": return a == b;
@@ -626,6 +645,7 @@ namespace shell
             throw new Exception("Cannot use operator " + strOperator + " on " + a + " and " + b);
         }
 
+        //Helper function to get one side of a conditional 
         public static string getCompareSide(ref int pos, string input){
             string side = "";
             for(int i = pos; i < input.Length; i++){
@@ -638,6 +658,7 @@ namespace shell
             return side;
         }
 
+        //Helper function to get a logical comparator between two values
         public static string getLogicalComparator(ref int pos, string input){
             for(int i = pos; i < input.Length; i++){
                 if(i < input.Length - 1 && isLogicalComparator(input[i].ToString() + input[i+1].ToString())){
@@ -656,6 +677,7 @@ namespace shell
             throw new Exception("Expected comparator.");
         }
 
+        //Helper function to get a logical operator (and or or) 
         public static string getLogicalOperator(ref int pos, string input){
             for(int i = pos; i < input.Length; i++){
                 if(i < input.Length - 1 && (input[i] == '&' || input[i] == '|')){
@@ -668,6 +690,7 @@ namespace shell
             return "";
         }
 
+        //Helper function to evaluate a parsed conditional. Must in the format (1/0 && 1/0) or (1/0 || 1/0)
         public static bool evalParsedConditional(string input){
             while(input.Length > 1){
                 //1||0
@@ -699,7 +722,8 @@ namespace shell
             if(input == "1"){return true;}
             return false;
         }
-
+    
+        //Helper function to evaluate a single conditional (does not handle && or ||)
         public static bool evaluateSingleConditional(string conditional, Scope localscope){
             string equivalentOutput = "";
             string rightSide = "";
@@ -729,6 +753,7 @@ namespace shell
             return evalParsedConditional(equivalentOutput);
         }
 
+        //Helper function to remove any extra parenthesis from conditional statements
         public static string removeParenthesis(string input){
             for(int i = 0; i < input.Length/2; i++){
                 if(input[0] == '(' && input[input.Length - 1] == ')'){
@@ -741,9 +766,7 @@ namespace shell
             return input;
         }
 
-        ///<summary>
-            ///Given a string with a conditional, it will return true or false. There are no limitations to logical operators.
-        ///</summary>
+        //Function to evaluate an entire conditional statement. No limit on length.
         public static bool evaluateConditional(string conditional, Scope localscope){
             bool isComplete = false;
             while(!isComplete){
@@ -760,6 +783,7 @@ namespace shell
         }
 
 
+        //Helper function to create a Function object and add it to the variables dictionary 
         public static void createFunction(string funcName, string input, Scope localscope){
             string expr = getParenExpr(input, Position);
             List<string> args = getargs(expr);
@@ -774,6 +798,7 @@ namespace shell
             func.type = "function";
         }
 
+        //Function to execute a function given the name, position, and function arguments. Calls itself recursivley to handle inner functions.
         public static Object executeFunction(string funcName, int pos, string input, Scope localscope){
             string arguments = getParenExpr(input, pos);
 
@@ -827,13 +852,17 @@ namespace shell
         }
 
 
-
+        //Helper function to get the parent scope of a scope (either a function or the initial scope)
         public static Scope getParentScope(Scope s){
             if(s.parentScope == null){return s;}
             else{return getParentScope(s.parentScope);}
         }
-
+        
+        /*Bool to track whether or not a function is returning. Used because if 'return' is called in an if statement and parse simply returns, it will exit into the
+            initial function and not out to whatever called the initial function.*/
         public static bool returning = false;
+    
+        //Function to parse and execute a LukeScript program
         public static void parse(string input, Scope currentLocalSpace = null){
             returning = false;
             while(Position < input.Length){
@@ -982,7 +1011,6 @@ namespace shell
                     if(returning){return;}
                 }
                 if(variables.ContainsKey(currentWord) || (currentLocalSpace != null && currentLocalSpace.localVars.ContainsKey(currentWord))){
-                    //TODO make it so that you can set stuff to functions
                     if(gettype(currentWord, currentLocalSpace, false) == "function"){
                         elimWhiteSpace(input, Position);
                         executeFunction(currentWord, Position, input, currentLocalSpace);
