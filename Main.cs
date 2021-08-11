@@ -151,12 +151,14 @@ namespace shell
         }
 
         //Gets the string that is between the nearest curly braces. 
-        public  static string getsection(int pos, string input){
+        public  static string getsection(int pos, string input)
+            //Skip to nearest open curly
             while(pos < input.Length && input[pos] != '{'){pos++;}
             if(pos >= input.Length){throw new Exception("Expected {.");}
             int curlyCount = 1;
             string section = "";
             pos++;
+            //Open curlys increase curlycount, closed curlys decrease it. Once curlycount is zero, the outer closing curly has been reached.
             while(pos < input.Length && curlyCount > 0){
                 if(input[pos] == '{'){curlyCount++;}
                 if(input[pos] == '}'){curlyCount--;}
@@ -170,6 +172,7 @@ namespace shell
         //Gets a single word, stops at any non-letter or '_' character.
         public static string getword(int pos, string input, bool updatePosition){
             string outword = "";
+            //Collect characters and underscores 
             while(pos < input.Length && (Char.IsLetter(input[pos]) || input[pos] == '_')){
                 outword += input[pos];
                 pos++;
@@ -203,6 +206,7 @@ namespace shell
             string expr = "";
             pos++;
 
+            //Open parenthesis increase totalparens, closed ones decrease it. Once totalparens is 0, we've reached the outer closing parenthesis. 
             while(totalParens > 0 && pos < input.Length){
                 if(input[pos] == '(') totalParens++;
                 else if(input[pos] == ')') totalParens--;
@@ -212,6 +216,7 @@ namespace shell
             if(pos >= input.Length && totalParens > 0){throw new Exception("Missing parenthesis.");}
             Position = pos;
 
+            //The first parehtnesis isn't collected, so the last parenthesis should be removed to match.
             expr = expr.Remove(expr.Length-1);
             return expr;
         }
@@ -237,6 +242,7 @@ namespace shell
         //Helper function to get the return type of a function, which is contained within < >
         public static string getFunctionType(int pos, string input){
             int i = pos;
+            //Skip to nearest <
             for(i = pos; i < input.Length; i++){
                 if(input[i] == '<'){
                     break;
@@ -244,6 +250,7 @@ namespace shell
             }
             i++;
             string typestr = "";
+            //Collect entire string within <>
             for(;i < input.Length; i++){
                 if(input[i] == '>'){
                     return typestr;
@@ -260,18 +267,25 @@ namespace shell
 
         //Helper function to get the type (string, num, or function) of an input string.
         public static string gettype(string input, Scope localscope, bool skipFunctions = false){
-
+            //Sometimes it is easier to skip functions and focus on variables or hardcoded values, hence the skipfunctions option
+            
             bool foundFunction = false;
+            
             for(int i = 0; i < input.Length; i++){
+                //If we hit a quote, the type must be string
                 if(input[i] == '"'){
                     return "string";
                 }
+                //If we hit a number, the type must be number
                 if(char.IsNumber(input[i])){
                     return "number";
                 }
+                
+                //If neither of those are true, the current word is a variable or function
                 if(char.IsLetter(input[i])){
                     string word = getword(i, input, false);
 
+                    //Test the localscope first to maintain scope priority 
                     if(localscope != null && localscope.localVars.ContainsKey(word)){
                         if(localscope.localVars[word].GetType() == typeof(System.String)){return "string";}
                         if(localscope.localVars[word].GetType() == typeof(System.Double)){return "number";}
@@ -281,9 +295,12 @@ namespace shell
                             if(!skipFunctions){
                                 return "function";
                             }
+                            //We just have the function word, and since we're not interested in the arguments, we can skip to the closing parenthesis
                             i = skipToParen(i, input);
                         }
                     }
+                    
+                    //Next, test the global variables
                     else if(variables.ContainsKey(word)){
                         if(variables[word].GetType() == typeof(System.String)){return "string";}
                         if(variables[word].GetType() == typeof(System.Double)){return "number";}
@@ -297,6 +314,7 @@ namespace shell
                     }
                 }
             }
+            //If we haven't returned by now, and we haven't been skipping functions, then there is an incorrect identifier.
             if(!foundFunction) throw new Exception("Expected identifier.");
             return "";
         }
@@ -306,14 +324,19 @@ namespace shell
             string currentarg = "";
             int parenCount = 0;
             List<string> arglist = new List<string>();
+            
             for(int i = 0; i < input.Length; i++){
+                //Skip whitespace and document parenthesis and quotes
                 if(Char.IsWhiteSpace(input[i]) && !lookingForString){continue;}
                 if(input[i] == '(' && !lookingForString){parenCount++;}
                 if(input[i] == ')' && !lookingForString){parenCount--;}
                 if(input[i] == '"'){lookingForString =! lookingForString;}
+                
+                //If the input is a comma and we aren't currently collecting a function (which might have commas in the arguments) then add the current argument to the list
                 if(input[i] == ',' && !lookingForString && parenCount == 0){arglist.Add(currentarg); currentarg = ""; continue;}
                 currentarg += input[i];
             }
+            //The last argument won't have a comma, so we need to add it here
             arglist.Add(currentarg);
             return arglist;
         }
@@ -321,9 +344,11 @@ namespace shell
         //Helper function to evaluate math on an input that has the type of string
         public static string evalStringMath(string input, Scope localscope){
             string finalString = "";
+            
             for(int i = 0; i < input.Length; i++){
                 if(input[i] == '"'){lookingForString = !lookingForString;}
 
+                //If the current char is a letter outside of a string, it must be a variable or function
                 if(Char.IsLetter(input[i]) && !lookingForString){
                     string word = getword(i, input, false);
 
@@ -331,6 +356,7 @@ namespace shell
                         //Go to parenthesis
                         while(i < input.Length && input[i] != '('){i++;}
 
+                        //Execute the function and cast its return value to a string
                         string value = (String)executeFunction(word, i, input+ ';', localscope);
 
                         i = skipToParen(i, input);
@@ -338,8 +364,11 @@ namespace shell
                         continue;
                     }
 
-
+                    
+                    //If the type of the variable is not a string, throw an error
                     if(gettype(word, localscope) != "string"){throw new Exception("Cannot convert type " + gettype(word, localscope) + " to type string.");}
+                    
+                    //If the localscope is null, then it must be a global variable
                     if(localscope == null){
                         if(variables.ContainsKey(word)){
                             finalString += (string)variables[word];
@@ -347,6 +376,7 @@ namespace shell
                         else throw new Exception("Variable " + word + " is undefined.");
                     }
                     else{
+                        //TODO FIX THIS
                         if(localscope.localVars.ContainsKey(word)){
                             finalString += (string)localscope.localVars[word];
                         }
@@ -355,6 +385,7 @@ namespace shell
                         }
                         else throw new Exception("Variable " + word + " is undefined.");
                     }
+                    //The only operation that is supported is addition, so we can just skip to the nearest plus sign (or the end of the string)
                     while(i < input.Length && input[i] != '+'){
                         i++;
                     }
@@ -373,13 +404,15 @@ namespace shell
             string evalString = "";
             for(int i = 0; i < input.Length; i++){
 
+                //If the char is a letter, it must be a function or variable
                 if(Char.IsLetter(input[i])){
                     string word = getword(i, input, false);
 
                     if(gettype(word, localscope) == "function"){
                         //Go to parenthesis
                         while(i < input.Length && input[i] != '('){i++;}
-
+                        
+                        //Evaluate function and cast its return value to a double
                         double value = (Double)executeFunction(word, i, input+ ';', localscope);
 
                         i = skipToParen(i, input);
@@ -387,7 +420,10 @@ namespace shell
                         continue;
                     }
 
+                    //If the variable type isn't number, throw an exception
                     else if(gettype(word, localscope) != "number"){throw new Exception("Cannot convert type " + gettype(word, localscope) + "to type number.");}
+                    
+                    //TODO FIX THIS
                     if(localscope == null){
                         if(variables.ContainsKey(word)){
                             evalString += variables[word].ToString();
@@ -413,6 +449,7 @@ namespace shell
                 evalString += input[i];
             }
 
+            //C# has a built in way to parse mathematical functions, so it makes sense to just use that
             DataTable dt = new DataTable();
             object result;
             double numfinal;
@@ -432,11 +469,15 @@ namespace shell
             elimWhiteSpace(input, pos);
             pos = Position;
             int endind = Position;
+            
             if(func == "print"){
                 string expr = getParenExpr(input, pos);
                 endind = Position;
                 List<string> args = getargs(expr);
+                
+                //Loop through each argument and print its value to the terminal
                 foreach(string elem in args){
+                    //Get the type of the argument and evaluate it
                     if(gettype(elem, localscope) == "string"){
                         outputText += evalStringMath(elem, localscope);
                     }
@@ -457,6 +498,7 @@ namespace shell
                 }
                 Console.Write(outputText + '\n');
             }
+            //Write the command to the commands text file so that the C++ shell can read and execute it
             else if(func == "execute"){
                 string path = "./lukescriptcommands.txt";
                 elimWhiteSpace(input, Position);
@@ -466,6 +508,7 @@ namespace shell
             Position = endind;
         }
 
+        //Return the string that is between the current char and the nearest non-string semicolon
         public static string getLine(int pos, string input){
             string line = "";
             pos++;
@@ -532,7 +575,10 @@ namespace shell
             int semiPos = Position;
             Position = tempPos;
             string evalstring = getLine(pos, input);
+            
+            
             if(gettype(evalstring, localscope, true) == "string"){
+                //TODO FIX ME
                 if(localscope == null){
                     variables[varname] = evalStringMath(evalstring, localscope);
                 }
@@ -550,6 +596,7 @@ namespace shell
                 Position = semiPos - 1;
             }
             else if(gettype(evalstring, localscope, true) == "number"){
+                //TODO FIX ME
                 if(localscope == null){
                     variables[varname] = Convert.ToDouble(evalNumberMath(evalstring, localscope));
                 }
@@ -572,10 +619,13 @@ namespace shell
                 elimWhiteSpace(evalstring, Position);
                 string funcName = getword(Position, evalstring, false);
 
+                //Create a temporary function object that holds whichever function was called
                 Function tempfunc = (Function)variables[funcName];
                 tempfunc.type = "function";
 
                 Object returnvar = 0;
+                
+                //Cast the function's return value to whatever the return type is
                 if(tempfunc.returnType == "num"){
                     returnvar = Convert.ToDouble(evalNumberMath(evalstring, localscope));
                     returnvar = (Double)returnvar;
@@ -588,10 +638,12 @@ namespace shell
                     throw new Exception("Unknown return type");
                 }
 
+                //If there is no return type, simply execute the function
                 if(localscope == null){
                     variables[varname] = returnvar;
                 }
                 else{
+                    //TODO FIX ME
                     if(localscope.localVars.ContainsKey(varname)){
                         localscope.localVars[varname] = returnvar;
                     }
@@ -632,11 +684,14 @@ namespace shell
             int parenCount = 0;
 
             for(int i = 0; i < conditional.Length; i++){
+                //If the previous and current characters are logical comparators, set foundlogicalcomparator to true
                 if(i > 0 && isLogicalComparator(conditional[i - 1].ToString() + conditional[i].ToString())){foundLogicalComparator = true;}
                 if(conditional[i] == '('){parenCount++;}
                 if(conditional[i] == ')'){parenCount--;}
                 if(conditional[i] == '(' && !addingToString){addingToString = true;}
+                //If the current char is a closing parenthesis and we've found a logical comparator, then the string we are adding to must be an inner conditional
                 if(conditional[i] == ')' && addingToString && parenCount == 0 && foundLogicalComparator){innerConditional += conditional[i]; return innerConditional;}
+                //If the current char is a closing parenthesis and we haven't found a logical comparator, then whatever was inside the parenthesis wasn't an inner conditional
                 if(conditional[i] == ')' && addingToString && parenCount == 0 && !foundLogicalComparator){addingToString = false; innerConditional = "";}
                 if(addingToString){innerConditional += conditional[i];}
 
@@ -674,6 +729,7 @@ namespace shell
         //Helper function to get one side of a conditional 
         public static string getCompareSide(ref int pos, string input){
             string side = "";
+            //If the current char is any of the below characters OR the end of the string, then we must have collected one side of the string to compare
             for(int i = pos; i < input.Length; i++){
                 if(input[i] == '|' || input[i] == '!' || input[i] == '&' || input[i] == '=' || input[i] == '>' || input[i] == '<'){
                     pos = i;
@@ -687,12 +743,14 @@ namespace shell
         //Helper function to get a logical comparator between two values
         public static string getLogicalComparator(ref int pos, string input){
             for(int i = pos; i < input.Length; i++){
+                //If the current and previous characters are comparators, then we've hit a comparator 
                 if(i < input.Length - 1 && isLogicalComparator(input[i].ToString() + input[i+1].ToString())){
                     string returnval = input[i].ToString() + input[i+1].ToString();
                     i += 2;
                     pos = i;
                     return returnval;
                 }
+                //If the current char is a logical comparator, return it (as of now only apples to '!')
                 else if(isLogicalComparator(input[i].ToString())){
                     string returnval = input[i].ToString();
                     i += 1;
@@ -719,16 +777,22 @@ namespace shell
         //Helper function to evaluate a parsed conditional. Must in the format (1/0 && 1/0) or (1/0 || 1/0)
         public static bool evalParsedConditional(string input){
             while(input.Length > 1){
-                //1||0
+                //Get the first side of the conditional
                 string a = input.Substring(0, 1);
+                //Get the operator
                 string op = input.Substring(1, 2);
+                //Get the second side
                 string b = input.Substring(3, 1);
 
+                //If a and b are 1, replace the conditional currently being evaluated with a 1
                 if(a == "1" && b == "1"){
                     input = input.Substring(4);
                     input = "1" + input;
                 }
+                
+                //If either a or b is 1
                 else if(a != b){
+                    //If the operator is ||, replace the conditional with 1. Else, replace with 0.
                     if(op == "||"){
                         input = input.Substring(4);
                         input = "1" + input;
@@ -738,6 +802,7 @@ namespace shell
                         input = "0" + input;
                     }
                 }
+                //If both a and b are zero, replace the conditional with 0.
                 else{
                     input = input.Substring(4);
                     input = "0" + input;
@@ -745,6 +810,7 @@ namespace shell
 
             }
 
+            //Eventually, the entire conditional will be worked down to either a 1 or a 0.
             if(input == "1"){return true;}
             return false;
         }
@@ -761,6 +827,7 @@ namespace shell
                 logicalComparator = getLogicalComparator(ref i, conditional);
                 rightSide = getCompareSide(ref i, conditional);
 
+                //If the type is string, evaluate whether it is true or false and add the bool (casted to a 1 or 0) to the end string. Do the same with numbers.
                 if(gettype(leftSide, localscope) == "string"){
                     leftSide = evalStringMath(leftSide, localscope);
                     rightSide = evalStringMath(rightSide, localscope);
@@ -775,7 +842,8 @@ namespace shell
                 if(logicalComparator == ""){i = conditional.Length;}
                 equivalentOutput += logicalComparator;
             }
-
+            
+            //Send the paresed string to evalparsedconditional to get a 0 or a 1
             return evalParsedConditional(equivalentOutput);
         }
 
@@ -792,14 +860,17 @@ namespace shell
             return input;
         }
 
-        //Function to evaluate an entire conditional statement. No limit on length.
+        //Function to evaluate an entire conditional statement.
         public static bool evaluateConditional(string conditional, Scope localscope){
             bool isComplete = false;
             while(!isComplete){
+                //If there are no parenthesis, then there are no inner conditionals and the current statement can be evaluated
                 if(!conditional.Contains(')') && !conditional.Contains('(')){return evaluateSingleConditional(conditional, localscope);}
+                //Otherwise, get the inner conditional
                 string innerconditional = getInnerConditional(conditional);
                 string tmpinnercond = innerconditional;
                 innerconditional = removeParenthesis(innerconditional);
+                //Evaluate the single conditional and replace the tmpinnerconditional with its value
                 bool eval = evaluateSingleConditional(innerconditional, localscope);
                 if(eval){conditional = conditional.Replace(tmpinnercond, "1 == 1");}
                 else{conditional = conditional.Replace(tmpinnercond, "0 == 1");}
@@ -832,7 +903,9 @@ namespace shell
 
             Function f = null;
 
+            //Functions cannot be created in a local scope, so we only need to check the global variables
             if(variables.ContainsKey(funcName)){
+                //Create an entirely new function and copy the values over (new is used here so that the variables don't refer to the same place in memory, which would mess with variable scope)
                 Function tempfunc = (Function)variables[funcName];
                 f = new Function(tempfunc.content, tempfunc.args);
                 f.type = "function";
@@ -843,6 +916,7 @@ namespace shell
             List<string> keys = f.localVars.Keys.ToList();
 
             for(int i = 0; i < keys.Count(); i++){
+                //Set the local variables of the function equal to the values of the arguments supplied
                 if(gettype(args[i], localscope, true) == "number"){
                     f.localVars[keys[i]] = Convert.ToDouble(evalNumberMath(args[i], localscope));
                 }
@@ -864,12 +938,15 @@ namespace shell
 
             int tempPos = Position;
             Position = 0;
-
+            
+            //Parse the content of the function
             parse(f.content, f);
             Position = tempPos;
-
+            
+            //Once the contents have been parsed, jump the position to the end of the line
             jumpToSemicolon(input, Position);
 
+            //If the function is supposed to return something and doesn't, throw an error
             if(f.returnval == null && f.returnType != "none"){
                 throw new Exception("Null return value");
             }
@@ -892,8 +969,9 @@ namespace shell
         public static void parse(string input, Scope currentLocalSpace = null){
             returning = false;
             while(Position < input.Length){
-
-                if(Position < input.Length - 1 && input[Position] == '/' && input[Position] == '/'){
+                
+                //If the current and next characters are '/', the line is a comment and can be skipped
+                if(Position < input.Length - 1 && input[Position] == '/' && input[Position+1== '/'){
                     while(Position < input.Length && input[Position] != '\n'){Position++;}
                 }
 
@@ -902,12 +980,15 @@ namespace shell
                 if(isBuiltIn(currentWord)){
                     executeBuiltIns(currentWord, Position, input, currentLocalSpace);
                 }
+
                 if(LanguageKeyWords.Contains(currentWord)){
+                    //If the current word is exit, return from parsing and set breakoutofsection to true to break out of the while loop
                     if(currentWord == "exit"){
                         breakOutOfSection = true;
                         return;
                     }
                     if(currentWord == "return" && currentLocalSpace != null){
+                        //Set returning to true so that it will escape to the parent function/scope
                         returning = true;
 
                         if(getParentScope(currentLocalSpace).returnType == "none"){
@@ -916,6 +997,7 @@ namespace shell
 
                         string retstring = getLine(Position, input);
 
+                        //Get the type of the return string, evaluate it, and set the return value to that
                         if(gettype(retstring, currentLocalSpace, true) == "number"){
                             getParentScope(currentLocalSpace).returnval = Convert.ToDouble(evalNumberMath(retstring, currentLocalSpace));
                         }
@@ -949,6 +1031,8 @@ namespace shell
                         return;
                     }
                 }
+                
+                //If the current word is a variable declaration (num or string) then we should create a variable
                 if(variableNames.Contains(currentWord)){
                     elimWhiteSpace(input, Position);
                     string variablename = getword(Position, input, true);
@@ -957,6 +1041,8 @@ namespace shell
                     if(Position < input.Length && input[Position] == '='){assignVariable(Position, input, variablename, currentLocalSpace); jumpToSemicolon(input, Position);}
                     if(Position < input.Length && input[Position] == '('){createFunction(variablename, input, currentLocalSpace);}
                 }
+                
+                //If the current word is if, while, or repeat
                 if(Loops.Contains(currentWord)){
                     if(currentWord == "repeat"){
                         elimWhiteSpace(input, Position);
@@ -966,17 +1052,21 @@ namespace shell
                         if(gettype(loopParams, currentLocalSpace) != "number"){throw new Exception("Cannot use string as repeat amount.");}
                         string loopBody = getsection(Position, input);
                         Position = tempPos;
+                        //Create a new repeat object
                         Repeat repeatloop = new Repeat(Position + 1, Position + loopBody.Length + 2, Convert.ToInt32(evalNumberMath(loopParams, currentLocalSpace)), loopBody);
                         repeatloop.type = "repeat";
 
+                        //Give the repeat loop a copy of the global variables
                         if(currentLocalSpace != null){
                             repeatloop.localVars = currentLocalSpace.localVars;
                             repeatloop.parentScope = currentLocalSpace;
                         }
-
+                        
+                        //Iterate as many times as the repeatamount is
                         for(int i = 0; i < repeatloop.repeatAmount; i++){
                             Position = 0;
                             parse(repeatloop.content, repeatloop);
+                            if(breakOutOfSection){break;}
                             repeatloop.localVars.Clear();
                         }
                         Position = repeatloop.endpos;
@@ -990,9 +1080,11 @@ namespace shell
                         int tempPos = Position;
                         string loopBody = getsection(Position, input);
                         Position = tempPos;
+                        //Create a new while object
                         While whileloop = new While(Position + 1, Position + loopBody.Length + 2, loopBody, conditional);
                         whileloop.type = "while";
 
+                        //Copy over the variables in the current scope
                         if(currentLocalSpace != null){
                             whileloop.localVars = currentLocalSpace.localVars;
                             whileloop.parentScope = currentLocalSpace;
@@ -1013,9 +1105,11 @@ namespace shell
                         elimWhiteSpace(input, Position);
                         int tempPos = Position;
                         string ifBody = getsection(Position, input);
-
+                        
+                        //Total end is not just the end of the if statment, but the end of subsequent else if/else as well
                         int totalend = getIfEndPos(input, Position);
                         Position = tempPos;
+                        //Create a new if object
                         If ifstatement = new If(Position + 1, Position + ifBody.Length + 1, ifBody, conditional);
                         ifstatement.type = "if";
 
@@ -1036,13 +1130,16 @@ namespace shell
                     }
                     if(returning){return;}
                 }
+                                                                                  
+                //If the current word is a variable
                 if(variables.ContainsKey(currentWord) || (currentLocalSpace != null && currentLocalSpace.localVars.ContainsKey(currentWord))){
+                    //If it is a function, execute it
                     if(gettype(currentWord, currentLocalSpace, false) == "function"){
                         elimWhiteSpace(input, Position);
                         executeFunction(currentWord, Position, input, currentLocalSpace);
                     }
                     else{
-                        
+                        //Set the variable equal to whatever is on the other side of the equal sign
                         elimWhiteSpace(input, Position);
 
                         if(input[Position] != '='){throw new Exception("Expected expression or assignment.");}
