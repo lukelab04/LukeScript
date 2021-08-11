@@ -1,4 +1,4 @@
-// ﻿MIT License
+// MIT License
 
 // Copyright (c) 2021 Luke LaBonte
 
@@ -30,8 +30,7 @@ using System.Data;
 using System.Linq;
 using System.IO;
 
-namespace shell
-    {
+namespace shell{
     class LukeScript{    
         public static string TextBody;
         public static int Position = 0;
@@ -135,10 +134,10 @@ namespace shell
 
         public static Dictionary<string, object> variables = new Dictionary<string, object>();
 
-        static void Main(string[] args)
+        static void Main(string[] args){
             //Paths of the input and output text files
-            string path = "./lukescript.txt";
-            string path2 = "./lukescriptcommands.txt";
+            string path = "./rundata/lukescript.txt";
+            string path2 = "./rundata/lukescriptcommands.txt";
             //Clear commands file
             File.WriteAllText(path2, String.Empty);
             TextBody = File.ReadAllText(path);
@@ -151,7 +150,7 @@ namespace shell
         }
 
         //Gets the string that is between the nearest curly braces. 
-        public  static string getsection(int pos, string input)
+        public  static string getsection(int pos, string input){
             //Skip to nearest open curly
             while(pos < input.Length && input[pos] != '{'){pos++;}
             if(pos >= input.Length){throw new Exception("Expected {.");}
@@ -368,23 +367,16 @@ namespace shell
                     //If the type of the variable is not a string, throw an error
                     if(gettype(word, localscope) != "string"){throw new Exception("Cannot convert type " + gettype(word, localscope) + " to type string.");}
                     
-                    //If the localscope is null, then it must be a global variable
-                    if(localscope == null){
-                        if(variables.ContainsKey(word)){
-                            finalString += (string)variables[word];
-                        }
-                        else throw new Exception("Variable " + word + " is undefined.");
+                    //Check the local and global scope for the variable
+                    if(localscope != null && localscope.localVars.ContainsKey(word)){
+                        finalString += (string)localscope.localVars[word];
                     }
-                    else{
-                        //TODO FIX THIS
-                        if(localscope.localVars.ContainsKey(word)){
-                            finalString += (string)localscope.localVars[word];
-                        }
-                        else if(variables.ContainsKey(word)){
-                            finalString += (string)variables[word];
-                        }
-                        else throw new Exception("Variable " + word + " is undefined.");
+                    else if(variables.ContainsKey(word)){
+                        finalString += (string)variables[word];
                     }
+                    else throw new Exception("Variable " + word + " is undefined." );
+
+
                     //The only operation that is supported is addition, so we can just skip to the nearest plus sign (or the end of the string)
                     while(i < input.Length && input[i] != '+'){
                         i++;
@@ -423,26 +415,16 @@ namespace shell
                     //If the variable type isn't number, throw an exception
                     else if(gettype(word, localscope) != "number"){throw new Exception("Cannot convert type " + gettype(word, localscope) + "to type number.");}
                     
-                    //TODO FIX THIS
-                    if(localscope == null){
-                        if(variables.ContainsKey(word)){
-                            evalString += variables[word].ToString();
-                        }
-                        else{
-                            throw new Exception("Identifier " + word + " is undefined.");
-                        }
+                    //Check the local and global scope for the variable
+                    if(localscope != null && localscope.localVars.ContainsKey(word)){
+                        evalString += localscope.localVars[word].ToString();
                     }
-                    else{
-                        if(localscope.localVars.ContainsKey(word)){
-                            evalString += localscope.localVars[word].ToString();
-                        }
-                        else if(variables.ContainsKey(word)){
-                            evalString += variables[word].ToString();
-                        }
-                        else{
-                            throw new Exception ("Identifier " + word + " is undefined.");
-                        }
+                    else if(variables.ContainsKey(word)){
+                        evalString += variables[word].ToString();
                     }
+                    else throw new Exception("Identifier " + word + " is undefined." );
+
+
                     while(i < input.Length && Char.IsLetter(input[i])){i++;}
                     if(i >= input.Length){break;}
                 }
@@ -500,7 +482,7 @@ namespace shell
             }
             //Write the command to the commands text file so that the C++ shell can read and execute it
             else if(func == "execute"){
-                string path = "./lukescriptcommands.txt";
+                string path = "./rundata/lukescriptcommands.txt";
                 elimWhiteSpace(input, Position);
                 string exeCommand = getParenExpr(input, Position);
                 File.AppendAllText(path, exeCommand.Substring(1, exeCommand.Length - 2) + "\n");
@@ -567,7 +549,6 @@ namespace shell
             }
         }
 
-
         //Assigns a variable to a value. This handles functions, numbers, and strings.
         public static void assignVariable(int pos, string input, string varname, Scope localscope){
             int tempPos = Position;
@@ -578,7 +559,7 @@ namespace shell
             
             
             if(gettype(evalstring, localscope, true) == "string"){
-                //TODO FIX ME
+                //If the variable exists, set it. If not, create a new variable.
                 if(localscope == null){
                     variables[varname] = evalStringMath(evalstring, localscope);
                 }
@@ -596,7 +577,7 @@ namespace shell
                 Position = semiPos - 1;
             }
             else if(gettype(evalstring, localscope, true) == "number"){
-                //TODO FIX ME
+                //If the variable exists, set it. If not, create a new variable.
                 if(localscope == null){
                     variables[varname] = Convert.ToDouble(evalNumberMath(evalstring, localscope));
                 }
@@ -638,12 +619,12 @@ namespace shell
                     throw new Exception("Unknown return type");
                 }
 
-                //If there is no return type, simply execute the function
+                //If the variable exists, set it. If not, create a new variable.
                 if(localscope == null){
                     variables[varname] = returnvar;
                 }
                 else{
-                    //TODO FIX ME
+                    
                     if(localscope.localVars.ContainsKey(varname)){
                         localscope.localVars[varname] = returnvar;
                     }
@@ -971,7 +952,7 @@ namespace shell
             while(Position < input.Length){
                 
                 //If the current and next characters are '/', the line is a comment and can be skipped
-                if(Position < input.Length - 1 && input[Position] == '/' && input[Position+1== '/'){
+                if(Position < input.Length - 1 && input[Position] == '/' && input[Position+1] == '/'){
                     while(Position < input.Length && input[Position] != '\n'){Position++;}
                 }
 
