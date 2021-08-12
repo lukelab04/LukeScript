@@ -1,7 +1,7 @@
 # LukeScript
 LukeScript is a scripting language built in C#. Originally, it was just for Blazor WebAssembly, but I ported it to Linux for use in a custom shell.
 
-This is the Linux build, which is slightly different than the WebAssembly build. If you want to run LukeScript locally, go [here](www.github.com/lukelab04).
+This is the Linux build, which is slightly different than the WebAssembly build. If you want to run LukeScript locally, go [here](https://github.com/lukelab04/LukeShell).
 # Usage
 ```
 //This is a LukeScript comment. Anything written on this line will be skipped.
